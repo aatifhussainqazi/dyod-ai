@@ -1,0 +1,47 @@
+{
+  "name": "dyod-ai",
+  "version": "1.0.0",
+  "description": "DYOD AI: A focused AI academic assistant for the DYOD programme at IUST",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "server": "tsx server/index.ts",
+    "dev:all": "tsx server/index.ts",
+    "ingest": "tsx scripts/ingestDocuments.ts",
+    "build-index": "tsx scripts/buildIndex.ts",
+    "validate-kb": "tsx scripts/validateKnowledgeBase.ts",
+    "eval": "tsx scripts/testEvaluation.ts"
+  },
+  "dependencies": {
+    "lucide-react": "^1.16.0",
+    "minisearch": "^7.1.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.9",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vercel/node": "^30.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mammoth": "^1.9.0",
+    "pdf-parse": "^1.1.1",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.3",
+    "typescript": "~5.7.3",
+    "vite": "^6.2.0"
+  }
+}
