@@ -3,6 +3,10 @@ import path from 'path';
 import MiniSearch, { SearchResult } from 'minisearch';
 import { DocumentChunk, DocumentMetadata } from '../../src/types/chat';
 
+// Embedded pre-indexed knowledge base for reliable zero-IO serverless operation
+import defaultMetadata from '../../knowledge_base/processed/metadata.json';
+import defaultChunks from '../../knowledge_base/chunks/chunks.json';
+
 export interface RetrievalResult {
   chunks: DocumentChunk[];
   scores: Record<string, number>;
@@ -108,23 +112,26 @@ export class RetrievalService {
   }
 
   public async initialize(): Promise<void> {
-    const chunksPath = path.join(this.baseDir, 'knowledge_base', 'chunks', 'chunks.json');
-    const metaPath = path.join(this.baseDir, 'knowledge_base', 'processed', 'metadata.json');
-
-    if (!fs.existsSync(chunksPath) || !fs.existsSync(metaPath)) {
-      console.warn('Knowledge base index files not found.');
-      this.isLoaded = true;
-      return;
-    }
-
     try {
-      const metadataList: DocumentMetadata[] = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+      let metadataList: DocumentMetadata[] = defaultMetadata as DocumentMetadata[];
+      let chunksList: DocumentChunk[] = defaultChunks as DocumentChunk[];
+
+      // If local filesystem override exists (e.g. newly ingested in dev), load from disk
+      const chunksPath = path.join(this.baseDir, 'knowledge_base', 'chunks', 'chunks.json');
+      const metaPath = path.join(this.baseDir, 'knowledge_base', 'processed', 'metadata.json');
+
+      if (fs.existsSync(chunksPath) && fs.existsSync(metaPath)) {
+        try {
+          metadataList = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+          chunksList = JSON.parse(fs.readFileSync(chunksPath, 'utf-8'));
+        } catch {}
+      }
+
       this.documentsMap.clear();
       for (const meta of metadataList) {
         this.documentsMap.set(meta.id, meta);
       }
 
-      const chunksList: DocumentChunk[] = JSON.parse(fs.readFileSync(chunksPath, 'utf-8'));
       this.chunksMap.clear();
       this.miniSearch.removeAll();
 
@@ -196,8 +203,6 @@ export class RetrievalService {
     }
 
     // Substantive evidence requirement:
-    // If query has 3 or more substantive words, require at least 2 to match
-    // If query has 1-2 words, require at least 1 to match
     let hasSubstantiveEvidence = true;
     if (queryWords.length >= 3) {
       hasSubstantiveEvidence = topicTermMatches >= 2;
