@@ -1,10 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import dotenv from 'dotenv';
-import path from 'path';
 import { ChatHandler } from '../handlers/chatHandler';
-
-dotenv.config();
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 let handlerInstance: ChatHandler | null = null;
 

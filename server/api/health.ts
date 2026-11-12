@@ -1,11 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import dotenv from 'dotenv';
-import path from 'path';
 import { RetrievalService } from '../rag/retrievalService';
 import { DocumentMetadata } from '../../src/types/chat';
-
-dotenv.config();
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
