@@ -2,10 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/**/*.ts": {
+    "api/**/*.js": {
       "memory": 1024,
-      "maxDuration": 30,
-      "includeFiles": "knowledge_base/**"
+      "maxDuration": 30
     }
   },
   "rewrites": [
