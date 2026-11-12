@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import dotenv from 'dotenv';
 import path from 'path';
-import { RetrievalService } from '../server/rag/retrievalService';
+import { RetrievalService } from '../rag/retrievalService';
+import { DocumentMetadata } from '../../src/types/chat';
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
@@ -16,7 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const retrieval = new RetrievalService();
   await retrieval.initialize();
-  const docs = retrieval.getDocuments();
+  const docs: DocumentMetadata[] = retrieval.getDocuments();
 
   return res.status(200).json({
     status: 'healthy',
@@ -25,12 +26,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     programme: 'Design Your Own Degree (DYOD)',
     timestamp: new Date().toISOString(),
     primaryProvider: 'gemini-free-tier',
-    primaryModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    primaryModel: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
     freeTierOnly: true,
     paidFallback: false,
     nvidiaEvaluationEnabled: process.env.NVIDIA_EVALUATION_ENABLED === 'true',
     knowledgeBase: {
-      approvedDocumentsCount: docs.filter((d) => d.verificationStatus === 'Approved').length,
+      approvedDocumentsCount: docs.filter((d: DocumentMetadata) => d.verificationStatus === 'Approved').length,
       totalDocumentsCount: docs.length,
       approvedChunksCount: retrieval.getApprovedChunkCount(),
       retrievalEngine: 'Local BM25 (MiniSearch)',

@@ -392,7 +392,7 @@ var require_main = __commonJS({
   }
 });
 
-// api/sources.ts
+// server/api/sources.ts
 var import_dotenv = __toESM(require_main(), 1);
 import path2 from "path";
 
@@ -3672,7 +3672,7 @@ var RetrievalService = class {
   }
 };
 
-// api/sources.ts
+// server/api/sources.ts
 import_dotenv.default.config();
 import_dotenv.default.config({ path: path2.resolve(process.cwd(), ".env.local") });
 async function handler(req, res) {

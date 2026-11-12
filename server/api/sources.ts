@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import dotenv from 'dotenv';
 import path from 'path';
-import { RetrievalService } from '../server/rag/retrievalService';
+import { RetrievalService } from '../rag/retrievalService';
+import { DocumentMetadata } from '../../src/types/chat';
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
@@ -16,10 +17,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const retrieval = new RetrievalService();
   await retrieval.initialize();
-  const docs = retrieval.getDocuments();
+  const docs: DocumentMetadata[] = retrieval.getDocuments();
 
-  // Return sanitized document metadata (no internal server file paths)
-  const sanitizedDocs = docs.map((d) => ({
+  const sanitizedDocs = docs.map((d: DocumentMetadata) => ({
     id: d.id,
     title: d.title,
     category: d.category,
@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({
     count: sanitizedDocs.length,
-    approvedCount: sanitizedDocs.filter((d) => d.verificationStatus === 'Approved').length,
+    approvedCount: sanitizedDocs.filter((d: any) => d.verificationStatus === 'Approved').length,
     sources: sanitizedDocs,
   });
 }

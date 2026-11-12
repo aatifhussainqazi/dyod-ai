@@ -1,9 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import dotenv from 'dotenv';
 import path from 'path';
-import { ChatHandler } from '../server/handlers/chatHandler';
+import { ChatHandler } from '../handlers/chatHandler';
 
-// Load environment variables if running locally or in serverless function
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
@@ -17,7 +16,6 @@ function getHandler(): ChatHandler {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
