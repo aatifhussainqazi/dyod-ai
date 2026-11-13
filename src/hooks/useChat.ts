@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnswerStyle, ChatMessage, ChatSession, Citation } from '../types/chat';
 import { ChatService } from '../services/chatService';
 
@@ -43,6 +43,7 @@ export function useChat() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Sync sessions to localStorage
   useEffect(() => {
@@ -100,9 +101,24 @@ export function useChat() {
     );
   }, [activeSessionId]);
 
+  const cancelCurrentRequest = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+  }, []);
+
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || isLoading) return;
+
+      // Abort any prior in-flight request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       const userMsg: ChatMessage = {
         id: `msg-${Date.now()}-u`,
@@ -139,38 +155,45 @@ export function useChat() {
         content: m.content,
       }));
 
-      const res = await ChatService.sendMessage({
-        message: text.trim(),
-        conversationId: activeSessionId,
-        history,
-        answerStyle: activeSession.currentStyle,
-      });
+      try {
+        const res = await ChatService.sendMessage(
+          {
+            message: text.trim(),
+            conversationId: activeSessionId,
+            history,
+            answerStyle: activeSession.currentStyle,
+          },
+          controller.signal
+        );
 
-      const assistantMsg: ChatMessage = {
-        id: `msg-${Date.now()}-a`,
-        sender: 'assistant',
-        content: res.answer,
-        timestamp: new Date().toISOString(),
-        status: res.status,
-        citations: res.citations || [],
-        grounded: res.grounded,
-        provider: res.provider,
-        answerStyle: activeSession.currentStyle,
-      };
+        const assistantMsg: ChatMessage = {
+          id: `msg-${Date.now()}-a`,
+          sender: 'assistant',
+          content: res.answer,
+          timestamp: new Date().toISOString(),
+          status: res.status,
+          scope: res.scope,
+          citations: res.citations || [],
+          grounded: res.grounded,
+          provider: res.provider,
+          answerStyle: activeSession.currentStyle,
+        };
 
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === activeSessionId
-            ? {
-                ...s,
-                updatedAt: new Date().toISOString(),
-                messages: [...s.messages, assistantMsg],
-              }
-            : s
-        )
-      );
-
-      setIsLoading(false);
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === activeSessionId
+              ? {
+                  ...s,
+                  updatedAt: new Date().toISOString(),
+                  messages: [...s.messages, assistantMsg],
+                }
+              : s
+          )
+        );
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+      }
     },
     [activeSession, activeSessionId, isLoading]
   );
@@ -216,5 +239,6 @@ export function useChat() {
     deleteSession,
     clearCurrentChat,
     retryLastMessage,
+    cancelCurrentRequest,
   };
 }

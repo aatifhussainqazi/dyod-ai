@@ -74,6 +74,7 @@ export class ChatHandler {
         statusCode: 200,
         response: {
           status: 'answered',
+          scope: 'IN_SCOPE',
           answer:
             "Hello! I am **DYOD AI**, your dedicated academic assistant for the **Design Your Own Degree (DYOD)** programme at IUST Awantipora. How can I assist you with your curriculum, academic baskets, practical methodologies, or project evaluation today?",
           citations: [],
@@ -85,11 +86,12 @@ export class ChatHandler {
 
     // 3. Scope Classification (Layer 1: DYOD-only scope check)
     const scopeResult = QueryClassifier.classify(message);
-    if (scopeResult.isRefusalRequired) {
+    if (scopeResult.scope === 'OUT_OF_SCOPE' || scopeResult.isRefusalRequired) {
       return {
         statusCode: 200,
         response: {
           status: 'out_of_scope',
+          scope: 'OUT_OF_SCOPE',
           answer: scopeResult.refusalMessage || QueryClassifier.getStandardRefusalMessage(),
           citations: [],
           provider: 'scope-guard',
@@ -116,6 +118,7 @@ export class ChatHandler {
         statusCode: 200,
         response: {
           status: 'insufficient_sources',
+          scope: 'IN_SCOPE_BUT_INSUFFICIENT_SOURCES',
           answer: QueryClassifier.getUnsupportedMessage(),
           citations: [],
           provider: 'rag-engine',
@@ -141,12 +144,15 @@ export class ChatHandler {
       if (
         lowerAnswer.includes("couldn't find sufficient information") ||
         lowerAnswer.includes("could not find sufficient information") ||
-        lowerAnswer.includes("insufficient information in the available")
+        lowerAnswer.includes("insufficient information in the available") ||
+        lowerAnswer.includes("not enough information in the currently approved") ||
+        lowerAnswer.includes("try checking the programme information documents")
       ) {
         return {
           statusCode: 200,
           response: {
             status: 'insufficient_sources',
+            scope: 'IN_SCOPE_BUT_INSUFFICIENT_SOURCES',
             answer: QueryClassifier.getUnsupportedMessage(),
             citations: [],
             provider: generated.provider,
@@ -155,7 +161,10 @@ export class ChatHandler {
         };
       }
 
-      // Check if LLM generated an out of scope refusal
+      // Check if LLM generated a refusal phrase:
+      // Since the query was already strictly classified as IN_SCOPE, any refusal by the LLM
+      // indicates missing source material in the retrieved context, NOT an out-of-scope question!
+      // Therefore, per Section 1 & Section 4, we must return IN_SCOPE_BUT_INSUFFICIENT_SOURCES.
       if (
         lowerAnswer.includes("can't answer unrelated") ||
         lowerAnswer.includes("cannot answer unrelated") ||
@@ -164,8 +173,9 @@ export class ChatHandler {
         return {
           statusCode: 200,
           response: {
-            status: 'out_of_scope',
-            answer: QueryClassifier.getStandardRefusalMessage(),
+            status: 'insufficient_sources',
+            scope: 'IN_SCOPE_BUT_INSUFFICIENT_SOURCES',
+            answer: QueryClassifier.getUnsupportedMessage(),
             citations: [],
             provider: generated.provider,
             grounded: false,
@@ -183,6 +193,7 @@ export class ChatHandler {
         statusCode: 200,
         response: {
           status: 'answered',
+          scope: 'IN_SCOPE',
           answer: generated.answer,
           citations: validatedCitations,
           provider: generated.provider,
@@ -229,5 +240,52 @@ export class ChatHandler {
 
   public getProviderManager(): ProviderManager {
     return this.providerManager;
+  }
+
+  public diagnose(query: string) {
+    const scopeResult = QueryClassifier.classify(query);
+    const retrieval = this.retrievalService.retrieve(query, 10);
+    const approvedDocs = this.retrievalService
+      .getDocuments()
+      .filter((d) => d.verificationStatus === 'Approved');
+
+    return {
+      query,
+      classificationResult: scopeResult.scope,
+      isRefusalRequired: scopeResult.isRefusalRequired,
+      documentsSearched: approvedDocs.map((d) => ({
+        id: d.id,
+        title: d.title,
+        category: d.category,
+        pageCount: d.pageCount,
+      })),
+      retrievedDocumentTitles: Array.from(new Set(retrieval.chunks.map((c) => c.documentTitle))),
+      retrievedPageNumbers: retrieval.chunks.map((c) => ({
+        documentTitle: c.documentTitle,
+        page: c.page,
+      })),
+      matchingHeadings: retrieval.chunks.map((c) => c.heading),
+      retrievalScores: retrieval.scores,
+      maxScore: retrieval.maxScore,
+      confidenceThresholdPassed: retrieval.thresholdPassed,
+      sufficientEvidence: retrieval.sufficientEvidence,
+      refusalReason:
+        scopeResult.scope === 'OUT_OF_SCOPE'
+          ? scopeResult.refusalReason
+          : !retrieval.sufficientEvidence
+          ? retrieval.refusalReason || 'Insufficient matching sources in approved corpus'
+          : null,
+      expandedQuery: retrieval.expandedQuery,
+      targetCategory: retrieval.targetCategory,
+      topPassages: retrieval.chunks.map((c) => ({
+        id: c.id,
+        documentTitle: c.documentTitle,
+        category: c.category,
+        page: c.page,
+        heading: c.heading,
+        score: retrieval.scores[c.id],
+        snippet: c.text.slice(0, 160) + '...',
+      })),
+    };
   }
 }

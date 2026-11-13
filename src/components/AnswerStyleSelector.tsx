@@ -28,30 +28,32 @@ export const AnswerStyleSelector: React.FC<AnswerStyleSelectorProps> = ({
   disabled = false,
 }) => {
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-1 text-xs no-scrollbar">
-      <span className="text-[11px] font-semibold text-slate-400 shrink-0 mr-1 hidden sm:inline">
-        Answer Style:
+    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 py-1 text-xs w-full">
+      <span className="text-[11px] font-semibold text-slate-400 shrink-0 mr-1 flex items-center gap-1">
+        <span>Answer Style:</span>
       </span>
-      {STYLES.map((style) => {
-        const Icon = style.icon;
-        const isActive = currentStyle === style.id;
-        return (
-          <button
-            key={style.id}
-            onClick={() => onSelectStyle(style.id)}
-            disabled={disabled}
-            title={style.tooltip}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full whitespace-nowrap transition-all border font-medium text-xs ${
-              isActive
-                ? 'bg-sky-500/15 border-sky-500/50 text-sky-300 shadow-sm'
-                : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
-            } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
-            <span>{style.label}</span>
-          </button>
-        );
-      })}
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 flex-1">
+        {STYLES.map((style) => {
+          const Icon = style.icon;
+          const isActive = currentStyle === style.id;
+          return (
+            <button
+              key={style.id}
+              onClick={() => onSelectStyle(style.id)}
+              disabled={disabled}
+              title={style.tooltip}
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full whitespace-nowrap transition-all border font-medium text-[11px] sm:text-xs select-none ${
+                isActive
+                  ? 'bg-sky-500/15 border-sky-500/50 text-sky-300 shadow-sm'
+                  : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
+              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
+              <span>{style.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };

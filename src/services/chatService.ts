@@ -1,9 +1,21 @@
 import { ChatRequest, ChatResponse } from '../types/chat';
 
 export class ChatService {
-  public static async sendMessage(request: ChatRequest): Promise<ChatResponse> {
+  public static async sendMessage(
+    request: ChatRequest,
+    externalSignal?: AbortSignal
+  ): Promise<ChatResponse> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+    // If external signal aborts, trigger our controller
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort();
+      } else {
+        externalSignal.addEventListener('abort', () => controller.abort());
+      }
+    }
 
     try {
       const response = await fetch('/api/chat', {
@@ -46,6 +58,15 @@ export class ChatService {
       clearTimeout(timeoutId);
 
       if (err.name === 'AbortError') {
+        if (externalSignal?.aborted) {
+          return {
+            status: 'error',
+            answer: 'Request was cancelled by user.',
+            citations: [],
+            provider: 'system',
+            grounded: false,
+          };
+        }
         return {
           status: 'error',
           answer: 'The request timed out. Please check your network and try again.',

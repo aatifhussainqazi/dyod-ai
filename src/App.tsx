@@ -6,6 +6,7 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageBubble } from './components/MessageBubble';
 import { MessageComposer } from './components/MessageComposer';
 import { AnswerStyleSelector } from './components/AnswerStyleSelector';
+import { ProgressiveLoader } from './components/ProgressiveLoader';
 import { CitationModal } from './components/CitationModal';
 import { SourcesModal } from './components/SourcesModal';
 import { AboutModal } from './components/AboutModal';
@@ -25,6 +26,7 @@ export const App: React.FC = () => {
     deleteSession,
     clearCurrentChat,
     retryLastMessage,
+    cancelCurrentRequest,
   } = useChat();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -126,29 +128,9 @@ export const App: React.FC = () => {
                   />
                 ))}
 
-                {/* Loading indicator */}
+                {/* Multi-stage progressive loading indicator */}
                 {isLoading && (
-                  <div className="flex gap-3 sm:gap-4 my-4 animate-in fade-in duration-150">
-                    <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 mt-0.5 text-sky-400 shadow-sm">
-                      <Bot className="w-4 h-4" />
-                    </div>
-                    <div className="rounded-2xl rounded-tl-sm p-4 bg-slate-900/90 border border-slate-800 text-slate-300 text-xs sm:text-sm flex items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-                        <span
-                          className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"
-                          style={{ animationDelay: '200ms' }}
-                        />
-                        <span
-                          className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"
-                          style={{ animationDelay: '400ms' }}
-                        />
-                      </div>
-                      <span className="text-slate-400 text-xs">
-                        Searching approved DYOD knowledge base & formulating grounded answer...
-                      </span>
-                    </div>
-                  </div>
+                  <ProgressiveLoader onCancel={cancelCurrentRequest} />
                 )}
 
                 <div ref={messagesEndRef} />

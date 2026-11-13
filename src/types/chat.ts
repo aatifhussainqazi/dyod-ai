@@ -65,6 +65,11 @@ export type AnswerStyle =
   | 'step-by-step'
   | 'comparison';
 
+export type ScopeClassification =
+  | 'IN_SCOPE'
+  | 'OUT_OF_SCOPE'
+  | 'IN_SCOPE_BUT_INSUFFICIENT_SOURCES';
+
 export type ChatResponseStatus =
   | 'answered'
   | 'out_of_scope'
@@ -78,6 +83,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   status?: ChatResponseStatus;
+  scope?: ScopeClassification;
   citations?: Citation[];
   grounded?: boolean;
   provider?: string;
@@ -105,9 +111,11 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   status: ChatResponseStatus;
+  scope?: ScopeClassification;
   answer: string;
   citations: Citation[];
   provider: string;
   grounded: boolean;
   error?: string;
+  diagnostic?: any;
 }

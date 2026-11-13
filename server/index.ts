@@ -80,6 +80,16 @@ app.post('/api/chat', async (req, res) => {
   res.status(result.statusCode).json(result.response);
 });
 
+// Admin Retrieval Diagnostic Endpoint (Section 2)
+app.get('/api/admin/diagnose', async (req, res) => {
+  const query = (req.query.q as string) || (req.query.query as string) || '';
+  if (!query) {
+    return res.status(400).json({ error: 'Query parameter "q" is required.' });
+  }
+  const diagnostic = chatHandler.diagnose(query);
+  res.json(diagnostic);
+});
+
 // Admin Document Management Endpoint
 app.get('/api/admin/documents', (req, res) => {
   const metaPath = path.join(process.cwd(), 'knowledge_base', 'processed', 'metadata.json');

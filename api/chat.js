@@ -125,11 +125,21 @@ var QueryClassifier = class {
     /what is your (system prompt|hidden prompt|instructions|api key)/i,
     /reveal your (api key|prompt|backend)/i
   ];
+  static EXPLICIT_IN_SCOPE_PATTERNS = [
+    /\b(what is dyod|so what is dyod|meaning of dyod|define dyod|about dyod|why dyod|design your own degree)\b/i,
+    /\b(basket|baskets|eight baskets|8 baskets|course baskets|academic baskets)\b/i,
+    /\b(programme structure|program structure|academic structure|academic scheme|curriculum|framework|modalities)\b/i,
+    /\b(subjects|courses|syllabus|semester subjects|modules)\b/i,
+    /\b(seed paper|waste paper|practical|methodology|deckle|pulp|viva|rubric|evaluation strategy|term end project)\b/i,
+    /\b(credits|majors|minor|exit options|early exit|certificate|diploma|degree)\b/i,
+    /\b(iust|awantipora|design innovation centre|dic)\b/i
+  ];
   static classify(query) {
     const trimmed = query.trim().toLowerCase();
     for (const pattern of this.INJECTION_PATTERNS) {
       if (pattern.test(trimmed)) {
         return {
+          scope: "OUT_OF_SCOPE",
           isPotentiallyInScope: false,
           isRefusalRequired: true,
           isInjectionAttempt: true,
@@ -141,26 +151,38 @@ var QueryClassifier = class {
     for (const keyword of this.PROHIBITED_KEYWORDS) {
       if (trimmed.includes(keyword)) {
         return {
+          scope: "OUT_OF_SCOPE",
           isPotentiallyInScope: false,
           isRefusalRequired: true,
           refusalReason: `Prohibited off-scope topic: ${keyword}`,
-          refusalMessage: "I'm DYOD AI, your dedicated academic assistant for the DYOD programme at IUST. I can help with questions covered by the approved DYOD study materials, but I can't answer unrelated general questions."
+          refusalMessage: this.getStandardRefusalMessage()
         };
       }
     }
-    if (/^(hi|hello|hey|salam|assalam u alaikum|good morning|good evening)$/i.test(trimmed)) {
+    for (const pattern of this.EXPLICIT_IN_SCOPE_PATTERNS) {
+      if (pattern.test(trimmed)) {
+        return {
+          scope: "IN_SCOPE",
+          isPotentiallyInScope: true,
+          isRefusalRequired: false
+        };
+      }
+    }
+    if (/^(hi|hello|hey|salam|assalam u alaikum|good morning|good evening|greetings)$/i.test(trimmed)) {
       return {
+        scope: "IN_SCOPE",
         isPotentiallyInScope: true,
         isRefusalRequired: false
       };
     }
     return {
+      scope: "IN_SCOPE",
       isPotentiallyInScope: true,
       isRefusalRequired: false
     };
   }
   static getUnsupportedMessage() {
-    return "I couldn't find sufficient information about this topic in the available DYOD study materials. Please check with your instructor or provide the relevant approved study material.";
+    return "I understand you're asking about the DYOD programme. However, I couldn't find enough information in the currently approved study materials to answer this accurately.\n\nTry checking the Programme Information documents, or ask your administrator to add the relevant material.";
   }
   static getStandardRefusalMessage() {
     return "I'm DYOD AI, your dedicated academic assistant for the DYOD programme at IUST. I can help with questions covered by the approved DYOD study materials, but I can't answer unrelated general questions.";
@@ -3259,15 +3281,7 @@ BS DYOD IUST Awantipora \u2022 Seed Paper Research & Viva Compendium (Sadiya, Gu
 ];
 
 // server/rag/retrievalService.ts
-var COMMON_STOP_WORDS = /* @__PURE__ */ new Set([
-  "dyod",
-  "iust",
-  "programme",
-  "program",
-  "degree",
-  "student",
-  "students",
-  "university",
+var COMMON_CONVERSATIONAL_STOP_WORDS = /* @__PURE__ */ new Set([
   "what",
   "when",
   "where",
@@ -3277,9 +3291,8 @@ var COMMON_STOP_WORDS = /* @__PURE__ */ new Set([
   "whose",
   "why",
   "how",
-  "explain",
-  "describe",
   "tell",
+  "me",
   "about",
   "please",
   "give",
@@ -3319,7 +3332,18 @@ var COMMON_STOP_WORDS = /* @__PURE__ */ new Set([
   "do",
   "did",
   "this",
-  "that"
+  "that",
+  "so",
+  "just",
+  "my",
+  "include",
+  "included",
+  "including",
+  "contain",
+  "contains",
+  "list",
+  "show",
+  "describe"
 ]);
 var RetrievalService = class {
   miniSearch;
@@ -3345,7 +3369,7 @@ var RetrievalService = class {
         "tokenCountEstimate"
       ],
       searchOptions: {
-        boost: { heading: 3, documentTitle: 2.5, subject: 2, text: 1 },
+        boost: { heading: 3.5, documentTitle: 2.5, subject: 2, text: 1 },
         prefix: true,
         fuzzy: 0.2,
         combineWith: "OR"
@@ -3387,52 +3411,150 @@ var RetrievalService = class {
       this.isLoaded = true;
     }
   }
-  retrieve(query, topK = 7) {
+  expandQuery(rawQuery) {
+    const lower = rawQuery.toLowerCase().trim();
+    let expanded = lower;
+    let boostCategory = void 0;
+    expanded = expanded.replace(/\beight\b/g, "8 eight");
+    expanded = expanded.replace(/\bseven\b/g, "7 seven");
+    expanded = expanded.replace(/\bsix\b/g, "6 six");
+    expanded = expanded.replace(/\bfour\b/g, "4 four");
+    expanded = expanded.replace(/\bthree\b/g, "3 three");
+    expanded = expanded.replace(/\btwo\b/g, "2 two");
+    expanded = expanded.replace(/\bone\b/g, "1 one");
+    const stripped = lower.replace(/^(so|tell me|can you explain|what is|what are|explain)\s+/i, "").trim();
+    if (/\b(what is dyod|about dyod|meaning of dyod|define dyod|what dyod means|why dyod|design your own degree)\b/i.test(
+      lower
+    ) || stripped === "dyod") {
+      expanded += ' "Design your own degree" DYOD IUST "Why Design your own degree" "Academic Scheme" multidisciplinary degree';
+      boostCategory = "Programme Information";
+    }
+    if (/\b(basket|baskets|8 baskets|eight baskets)\b/i.test(lower)) {
+      expanded += ' "Course Baskets" "Basket number" "8 baskets" "Natural Sciences" "Mathematical Sciences" "Computing and Data Science" "Humanities" "Engineering" "Sustainability" "Design" "Wellness"';
+      boostCategory = "Programme Information";
+    }
+    if (/\b(structure|framework|curriculum|scheme|modalities)\b/i.test(lower)) {
+      expanded += ' "Academic Scheme" "Semester-wise Structure" "DYOD@IUST - Basic Modalities" credits duration';
+      boostCategory = "Programme Information";
+    }
+    if (/\b(subject|subjects|course|courses|syllabus)\b/i.test(lower)) {
+      expanded += ' "Academic Scheme -Semester-I" "Academic Scheme -Semester-II" "Courses and Courses Basket Mapping" "Sample Course Content"';
+      boostCategory = "Programme Information";
+    }
+    if (/\b(evaluation|rubric|viva|assessment|phases|marks|score)\b/i.test(lower)) {
+      expanded += ' "Evaluation Strategy" "Term-End Project" "Phase" "Rubric" viva';
+      boostCategory = "Examination and Assessment";
+    }
+    if (/\b(seed paper|waste paper|pulp|deckle|mesh|soaking|blending|drying)\b/i.test(lower)) {
+      expanded += ' "Waste Paper to Seed Paper" methodology practical pulping';
+      boostCategory = "Practical Work";
+    }
+    return { expandedText: expanded, boostCategory };
+  }
+  retrieve(query, topK = 6) {
     if (!this.isLoaded) {
-      return { chunks: [], scores: {}, maxScore: 0, sufficientEvidence: false, topicTermMatches: 0 };
+      return {
+        query,
+        expandedQuery: query,
+        chunks: [],
+        scores: {},
+        maxScore: 0,
+        sufficientEvidence: false,
+        topicTermMatches: 0,
+        thresholdPassed: false,
+        refusalReason: "Knowledge base index not loaded"
+      };
     }
     const cleanedQuery = query.replace(/[^\w\s-]/g, " ").trim();
     if (!cleanedQuery) {
-      return { chunks: [], scores: {}, maxScore: 0, sufficientEvidence: false, topicTermMatches: 0 };
+      return {
+        query,
+        expandedQuery: query,
+        chunks: [],
+        scores: {},
+        maxScore: 0,
+        sufficientEvidence: false,
+        topicTermMatches: 0,
+        thresholdPassed: false,
+        refusalReason: "Empty query"
+      };
     }
-    const queryWords = cleanedQuery.toLowerCase().split(/\s+/).filter((w) => w.length >= 3 && !COMMON_STOP_WORDS.has(w));
-    const rawResults = this.miniSearch.search(cleanedQuery);
+    const { expandedText, boostCategory } = this.expandQuery(cleanedQuery);
+    const substantiveKeywords = cleanedQuery.toLowerCase().split(/\s+/).filter((w) => w.length >= 3 && !COMMON_CONVERSATIONAL_STOP_WORDS.has(w));
+    const rawResults = this.miniSearch.search(expandedText);
     if (rawResults.length === 0) {
-      return { chunks: [], scores: {}, maxScore: 0, sufficientEvidence: false, topicTermMatches: 0 };
+      return {
+        query,
+        expandedQuery: expandedText,
+        targetCategory: boostCategory,
+        chunks: [],
+        scores: {},
+        maxScore: 0,
+        sufficientEvidence: false,
+        topicTermMatches: 0,
+        thresholdPassed: false,
+        refusalReason: "No matching chunks found in BM25 index"
+      };
     }
-    const maxScore = rawResults[0].score;
-    const scores = {};
-    const topResults = rawResults.slice(0, topK);
+    const scoredResults = rawResults.map((res) => {
+      const chunk = this.chunksMap.get(res.id);
+      let adjustedScore = res.score;
+      if (chunk && boostCategory && chunk.category === boostCategory) {
+        adjustedScore *= 2.5;
+      }
+      return { ...res, score: adjustedScore, chunk };
+    });
+    scoredResults.sort((a, b) => b.score - a.score);
+    const maxScore = scoredResults[0]?.score || 0;
+    const topResults = scoredResults.slice(0, topK);
     const chunks = [];
+    const scores = {};
     for (const res of topResults) {
       scores[res.id] = res.score;
-      const chunk = this.chunksMap.get(res.id);
-      if (chunk) {
-        chunks.push(chunk);
+      if (res.chunk) {
+        chunks.push(res.chunk);
       }
     }
     let topicTermMatches = 0;
-    if (queryWords.length > 0) {
+    if (substantiveKeywords.length > 0) {
       const combinedRetrievedText = chunks.map((c) => `${c.heading} ${c.text}`).join(" ").toLowerCase();
-      for (const word of queryWords) {
-        if (combinedRetrievedText.includes(word)) {
+      for (const word of substantiveKeywords) {
+        const stem = word.endsWith("ies") ? word.slice(0, -3) + "y" : word.endsWith("es") ? word.slice(0, -2) : word.endsWith("s") ? word.slice(0, -1) : word;
+        const altStem = word.startsWith("program") ? "program" : stem;
+        if (combinedRetrievedText.includes(word) || combinedRetrievedText.includes(stem) || combinedRetrievedText.includes(altStem)) {
           topicTermMatches++;
         }
       }
     }
-    let hasSubstantiveEvidence = true;
-    if (queryWords.length >= 3) {
-      hasSubstantiveEvidence = topicTermMatches >= 2;
-    } else if (queryWords.length > 0) {
+    const thresholdPassed = maxScore >= this.MIN_SCORE_THRESHOLD && chunks.length > 0;
+    let hasSubstantiveEvidence = false;
+    if (boostCategory !== void 0 && maxScore >= this.MIN_SCORE_THRESHOLD * 2) {
+      hasSubstantiveEvidence = true;
+    } else if (substantiveKeywords.length >= 3) {
       hasSubstantiveEvidence = topicTermMatches >= 1;
+    } else if (substantiveKeywords.length > 0) {
+      hasSubstantiveEvidence = topicTermMatches >= 1 || maxScore >= 30;
+    } else {
+      hasSubstantiveEvidence = thresholdPassed;
     }
-    const sufficientEvidence = maxScore >= this.MIN_SCORE_THRESHOLD && chunks.length > 0 && hasSubstantiveEvidence;
+    const sufficientEvidence = thresholdPassed && hasSubstantiveEvidence;
+    let refusalReason = void 0;
+    if (!thresholdPassed) {
+      refusalReason = `Max BM25 score (${maxScore.toFixed(1)}) below minimum threshold (${this.MIN_SCORE_THRESHOLD})`;
+    } else if (!hasSubstantiveEvidence) {
+      refusalReason = `Substantive topic keywords [${substantiveKeywords.join(", ")}] not adequately represented in retrieved chunks`;
+    }
     return {
+      query,
+      expandedQuery: expandedText,
+      targetCategory: boostCategory,
       chunks,
       scores,
       maxScore,
       sufficientEvidence,
-      topicTermMatches
+      topicTermMatches,
+      thresholdPassed,
+      refusalReason
     };
   }
   getDocuments() {
@@ -3467,7 +3589,9 @@ CORE IDENTITY & PURPOSE:
 STRICT DYOD-ONLY ENFORCEMENT:
 1. Answer ONLY questions that pertain to the DYOD programme at IUST and are grounded in the provided APPROVED SOURCES below.
 2. If the user's question cannot be answered using the provided sources, or the sources contain insufficient evidence, you MUST reply:
-"I couldn't find sufficient information about this topic in the available DYOD study materials. Please check with your instructor or provide the relevant approved study material."
+"I understand you're asking about the DYOD programme. However, I couldn't find enough information in the currently approved study materials to answer this accurately.
+
+Try checking the Programme Information documents, or ask your administrator to add the relevant material."
 3. Never invent course rules, credits, project evaluation criteria, deadlines, marks, or syllabus topics.
 4. If the user asks an unrelated general question (e.g., sports, weather, entertainment, non-DYOD trivia, personal advice), you must refuse politely:
 "I'm DYOD AI, your dedicated academic assistant for the DYOD programme at IUST. I can help with questions covered by the approved DYOD study materials, but I can't answer unrelated general questions."
@@ -3824,6 +3948,7 @@ var ChatHandler = class {
         statusCode: 200,
         response: {
           status: "answered",
+          scope: "IN_SCOPE",
           answer: "Hello! I am **DYOD AI**, your dedicated academic assistant for the **Design Your Own Degree (DYOD)** programme at IUST Awantipora. How can I assist you with your curriculum, academic baskets, practical methodologies, or project evaluation today?",
           citations: [],
           provider: "system",
@@ -3832,11 +3957,12 @@ var ChatHandler = class {
       };
     }
     const scopeResult = QueryClassifier.classify(message);
-    if (scopeResult.isRefusalRequired) {
+    if (scopeResult.scope === "OUT_OF_SCOPE" || scopeResult.isRefusalRequired) {
       return {
         statusCode: 200,
         response: {
           status: "out_of_scope",
+          scope: "OUT_OF_SCOPE",
           answer: scopeResult.refusalMessage || QueryClassifier.getStandardRefusalMessage(),
           citations: [],
           provider: "scope-guard",
@@ -3857,6 +3983,7 @@ var ChatHandler = class {
         statusCode: 200,
         response: {
           status: "insufficient_sources",
+          scope: "IN_SCOPE_BUT_INSUFFICIENT_SOURCES",
           answer: QueryClassifier.getUnsupportedMessage(),
           citations: [],
           provider: "rag-engine",
@@ -3872,11 +3999,12 @@ var ChatHandler = class {
         history
       );
       const lowerAnswer = generated.answer.toLowerCase();
-      if (lowerAnswer.includes("couldn't find sufficient information") || lowerAnswer.includes("could not find sufficient information") || lowerAnswer.includes("insufficient information in the available")) {
+      if (lowerAnswer.includes("couldn't find sufficient information") || lowerAnswer.includes("could not find sufficient information") || lowerAnswer.includes("insufficient information in the available") || lowerAnswer.includes("not enough information in the currently approved") || lowerAnswer.includes("try checking the programme information documents")) {
         return {
           statusCode: 200,
           response: {
             status: "insufficient_sources",
+            scope: "IN_SCOPE_BUT_INSUFFICIENT_SOURCES",
             answer: QueryClassifier.getUnsupportedMessage(),
             citations: [],
             provider: generated.provider,
@@ -3888,8 +4016,9 @@ var ChatHandler = class {
         return {
           statusCode: 200,
           response: {
-            status: "out_of_scope",
-            answer: QueryClassifier.getStandardRefusalMessage(),
+            status: "insufficient_sources",
+            scope: "IN_SCOPE_BUT_INSUFFICIENT_SOURCES",
+            answer: QueryClassifier.getUnsupportedMessage(),
             citations: [],
             provider: generated.provider,
             grounded: false
@@ -3904,6 +4033,7 @@ var ChatHandler = class {
         statusCode: 200,
         response: {
           status: "answered",
+          scope: "IN_SCOPE",
           answer: generated.answer,
           citations: validatedCitations,
           provider: generated.provider,
@@ -3943,6 +4073,44 @@ var ChatHandler = class {
   }
   getProviderManager() {
     return this.providerManager;
+  }
+  diagnose(query) {
+    const scopeResult = QueryClassifier.classify(query);
+    const retrieval = this.retrievalService.retrieve(query, 10);
+    const approvedDocs = this.retrievalService.getDocuments().filter((d) => d.verificationStatus === "Approved");
+    return {
+      query,
+      classificationResult: scopeResult.scope,
+      isRefusalRequired: scopeResult.isRefusalRequired,
+      documentsSearched: approvedDocs.map((d) => ({
+        id: d.id,
+        title: d.title,
+        category: d.category,
+        pageCount: d.pageCount
+      })),
+      retrievedDocumentTitles: Array.from(new Set(retrieval.chunks.map((c) => c.documentTitle))),
+      retrievedPageNumbers: retrieval.chunks.map((c) => ({
+        documentTitle: c.documentTitle,
+        page: c.page
+      })),
+      matchingHeadings: retrieval.chunks.map((c) => c.heading),
+      retrievalScores: retrieval.scores,
+      maxScore: retrieval.maxScore,
+      confidenceThresholdPassed: retrieval.thresholdPassed,
+      sufficientEvidence: retrieval.sufficientEvidence,
+      refusalReason: scopeResult.scope === "OUT_OF_SCOPE" ? scopeResult.refusalReason : !retrieval.sufficientEvidence ? retrieval.refusalReason || "Insufficient matching sources in approved corpus" : null,
+      expandedQuery: retrieval.expandedQuery,
+      targetCategory: retrieval.targetCategory,
+      topPassages: retrieval.chunks.map((c) => ({
+        id: c.id,
+        documentTitle: c.documentTitle,
+        category: c.category,
+        page: c.page,
+        heading: c.heading,
+        score: retrieval.scores[c.id],
+        snippet: c.text.slice(0, 160) + "..."
+      }))
+    };
   }
 };
 
